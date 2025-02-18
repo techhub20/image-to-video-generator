@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create stunning videos from your images with our easy-to-use generator. Add music and create a video in minutes.">
+  <meta name="keywords" content="image to video, video generator, create video, video maker, slideshow, add music">
+  <meta name="author" content="Your Name or Website Name">
+  <meta property="og:title" content="Image to Video Generator">
+  <meta property="og:description" content="Turn your images into a video and add background music easily!">
+  <meta property="og:image" content="https://yourwebsite.com/images/thumbnail.jpg">
+  <meta property="og:url" content="https://yourusername.github.io/image-to-video-generator/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Image to Video Generator">
+  <meta name="twitter:description" content="Turn your images into a video and add background music easily!">
+  <meta name="twitter:image" content="https://yourwebsite.com/images/thumbnail.jpg">
+  <title>Image to Video Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@latest"></script>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Image to Video Generator",
+      "url": "https://yourusername.github.io/image-to-video-generator/",
+      "description": "Create videos from images and add music with our easy-to-use image-to-video generator!",
+      "author": {
+        "@type": "Organization",
+        "name": "Your Website Name"
+      }
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f4f4f9; text-align: center; color: #333; }
+    header { background: #333; color: white; padding: 20px; }
+    h1 { font-size: 2.2em; }
+    p { font-size: 1.2em; margin-top: 10px; }
+    main { padding: 30px; }
+    .upload-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+    input[type="file"] { margin: 10px 0; padding: 10px; }
+    button { padding: 10px 20px; background: #5cb85c; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button:hover { background: #4cae4c; }
+    .progress-container { width: 100%; background: #ddd; height: 10px; border-radius: 5px; margin: 20px 0; }
+    #progressBar { height: 100%; background: #5cb85c; width: 0; border-radius: 5px; }
+    .video-container { display: none; text-align: center; }
+    video { width: 100%; max-width: 640px; border-radius: 8px; }
+    .download-button { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+    .download-button:hover { background: #0056b3; }
+    footer { background: #333; color: white; padding: 20px; margin-top: 30px; }
+    @media screen and (max-width: 600px) {
+      body { font-size: 14px; }
+      iframe { height: 400px; }
+      .upload-section { padding: 15px; }
+      button { font-size: 1.2em; padding: 12px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Image to Video Generator</h1>
+    <p>Upload images, add music, and generate a video in minutes!</p>
+  </header>
+
+  <main>
+    <div class="upload-section">
+      <label for="imageUpload">Select images to create a video:</label>
+      <input type="file" id="imageUpload" multiple accept="image/*">
+
+      <label for="audioUpload">Add background music (optional):</label>
+      <input type="file" id="audioUpload" accept="audio/*">
+
+      <button id="generateButton">Generate Video</button>
+    </div>
+
+    <div id="progress" class="progress-container">
+      <div id="progressBar"></div>
+    </div>
+
+    <div id="videoContainer" class="video-container">
+      <video id="videoOutput" controls></video>
+      <a id="downloadLink" href="#" download="video.mp4" class="download-button">Download Video</a>
+    </div>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Image-to-video-generator. All rights reserved.</p>
+  </footer>
+
+  <script>
+    document.getElementById('generateButton').addEventListener('click', generateVideo);
+
+    async function generateVideo() {
+      const images = document.getElementById('imageUpload').files;
+      const audioFile = document.getElementById('audioUpload').files[0];
+      const progressBar = document.getElementById('progressBar');
+      const videoContainer = document.getElementById('videoContainer');
+      const downloadLink = document.getElementById('downloadLink');
+
+      if (images.length === 0) {
+        alert('Please upload at least one image!');
+        return;
+      }
+
+      const ffmpeg = createFFmpeg({ log: true });
+      await ffmpeg.load();
+
+      for (let i = 0; i < images.length; i++) {
+        const imageFile = images[i];
+        const imageName = `image${i}.jpg`;
+        ffmpeg.FS('writeFile', imageName, await fetchFile(imageFile));
+        updateProgress((i + 1) / images.length);
+      }
+
+      await ffmpeg.run('-framerate', '1', '-i', 'image%d.jpg', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', 'output.mp4');
+
+      if (audioFile) {
+        ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioFile));
+        await ffmpeg.run('-i', 'output.mp4', '-i', 'audio.mp3', '-c:v', 'copy', '-c:a', 'aac', 'final_output.mp4');
+      }
+
+      const videoData = ffmpeg.FS('readFile', 'final_output.mp4');
+      const videoBlob = new Blob([videoData.buffer], { type: 'video/mp4' });
+      const videoURL = URL.createObjectURL(videoBlob);
+
+      document.getElementById('videoOutput').src = videoURL;
+      downloadLink.href = videoURL;
+      videoContainer.style.display = 'block';
+    }
+
+    function updateProgress(progress) {
+      document.getElementById('progressBar').style.width = `${progress * 100}%`;
+    }
+  </script>
+
+</body>
+</html>
