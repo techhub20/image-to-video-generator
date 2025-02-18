@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image to Video Generator</title>
+  <style>
+    /* General body styling */
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f4f7fc;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    /* Styling for the upload section */
+    #imageUpload {
+      margin: 20px 0;
+      padding: 10px;
+      border: 2px dashed #4CAF50;
+      border-radius: 5px;
+      font-size: 1rem;
+      cursor: pointer;
+      background-color: #fff;
+      transition: all 0.3s;
+    }
+
+    #imageUpload:hover {
+      border-color: #45a049;
+      background-color: #eafaf1;
+    }
+
+    /* Image preview styling */
+    #imagePreview {
+      display: flex;
+      margin-top: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    #imagePreview img {
+      width: 80px;
+      height: 80px;
+      margin: 5px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Styling for the button */
+    #generateVideo {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 30px;
+    }
+
+    #generateVideo:hover {
+      background-color: #45a049;
+      transform: scale(1.05);
+    }
+
+    /* Output section for the video */
+    #output {
+      margin-top: 30px;
+      text-align: center;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #output video {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    #output a {
+      text-decoration: none;
+      background-color: #007BFF;
+      color: white;
+      padding: 12px 25px;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+
+    #output a:hover {
+      background-color: #0056b3;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 2rem;
+      }
+
+      #generateVideo {
+        width: 100%;
+      }
+
+      #imagePreview img {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Image to Video Generator</h1>
+  
+  <!-- File input for image selection -->
+  <input type="file" id="imageUpload" multiple>
+  
+  <!-- Container for image previews -->
+  <div id="imagePreview"></div>
+
+  <!-- Button to generate the video -->
+  <button id="generateVideo">Generate Video</button>
+
+  <!-- Output container for the generated video -->
+  <div id="output"></div>
+
+  <!-- FFmpeg CDN link -->
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
+    // DOM Elements
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreview = document.getElementById('imagePreview');
+    const generateVideoButton = document.getElementById('generateVideo');
+    const output = document.getElementById('output');
+
+    let uploadedImages = [];
+
+    // Check if FFmpeg is available
+    if (typeof FFmpeg === 'undefined') {
+      console.error('FFmpeg is not defined. Make sure ffmpeg.js is loaded.');
+    } else {
+      // Handle image upload
+      imageUpload.addEventListener('change', function (event) {
+        const files = event.target.files;
+        imagePreview.innerHTML = ''; // Clear previous preview
+        uploadedImages = []; // Reset uploaded images array
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const reader = new FileReader();
+
+          reader.onload = function (e) {
+            // Display the uploaded image in the preview
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            imagePreview.appendChild(img);
+
+            // Add the image to the uploadedImages array
+            uploadedImages.push(e.target.result);
+          };
+
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Handle video generation
+      generateVideoButton.addEventListener('click', async function () {
+        if (uploadedImages.length === 0) {
+          alert('Please upload at least one image.');
+          return;
+        }
+
+        // Disable the button during processing
+        generateVideoButton.disabled = true;
+        generateVideoButton.innerText = 'Processing...';
+
+        try {
+          // Load FFmpeg if not already loaded
+          if (!ffmpeg.isLoaded()) {
+            await ffmpeg.load();
+          }
+
+          // Write each image to FFmpeg's file system
+          for (let i = 0; i < uploadedImages.length; i++) {
+            const imageData = await fetchFile(uploadedImages[i]);
+            ffmpeg.FS('writeFile', `image${i}.png`, imageData);
+          }
+
+          // Run FFmpeg command to generate video
+          await ffmpeg.run(
+            '-framerate', '1', // 1 frame per second
+            '-i', 'image%d.png', // Input images (image0.png, image1.png, etc.)
+            '-c:v', 'libx264', // Video codec
+            '-r', '30', // Output frame rate
+            '-pix_fmt', 'yuv420p', // Pixel format
+            'output.mp4' // Output file
+          );
+
+          // Read the generated video
+          const videoData = ffmpeg.FS('readFile', 'output.mp4');
+          const videoBlob = new Blob([videoData.buffer], { type: 'video/mp4' });
+          const videoUrl = URL.createObjectURL(videoBlob);
+
+          // Display the video
+          output.innerHTML = ''; // Clear previous output
+          const videoElement = document.createElement('video');
+          videoElement.src = videoUrl;
+          videoElement.controls = true;
+          output.appendChild(videoElement);
+
+          // Add a download link
+          const downloadLink = document.createElement('a');
+          downloadLink.href = videoUrl;
+          downloadLink.download = 'generated-video.mp4';
+          downloadLink.innerText = 'Download Video';
+          output.appendChild(downloadLink);
+        } catch (error) {
+          console.error('Error generating video:', error);
+          alert('An error occurred while generating the video. Please try again.');
+        } finally {
+          // Re-enable the button
+          generateVideoButton.disabled = false;
+          generateVideoButton.innerText = 'Generate Video';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
